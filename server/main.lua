@@ -135,44 +135,68 @@ AddEventHandler('esx_govjob:putStockItems', function(itemName, count)
 	end)
 end)
 
-ESX.RegisterServerCallback('esx_govjob:getOtherPlayerData', function(source, cb, target, notify)
-	local xPlayer = ESX.GetPlayerFromId(target)
+ESX.RegisterServerCallback('esx_govjob:getOtherPlayerData', function(source, cb, target)
+	if Config.EnableESXIdentity then
+		local xPlayer = ESX.GetPlayerFromId(target)
+		local result = MySQL.Sync.fetchAll('SELECT firstname, lastname, sex, dateofbirth, height FROM users WHERE identifier = @identifier', {
+			['@identifier'] = xPlayer.identifier
+		})
 
-	if notify then
-		xPlayer.showNotification(_U('being_searched'))
-	end
+		local firstname = result[1].firstname
+		local lastname  = result[1].lastname
+		local sex       = result[1].sex
+		local dob       = result[1].dateofbirth
+		local height    = result[1].height
 
-	if xPlayer then
 		local data = {
-			name = xPlayer.getName(),
-			job = xPlayer.job.label,
-			grade = xPlayer.job.grade_label,
-			inventory = xPlayer.getInventory(),
-			accounts = xPlayer.getAccounts(),
-			weapons = xPlayer.getLoadout()
+			name      = GetPlayerName(target),
+			job       = xPlayer.job,
+			inventory = xPlayer.inventory,
+			accounts  = xPlayer.accounts,
+			weapons   = xPlayer.loadout,
+			firstname = firstname,
+			lastname  = lastname,
+			sex       = sex,
+			dob       = dob,
+			height    = height
 		}
 
-		if Config.EnableESXIdentity then
-			data.dob = xPlayer.get('dateofbirth')
-			data.height = xPlayer.get('height')
+		TriggerEvent('esx_status:getStatus', target, 'drunk', function(status)
+			if status ~= nil then
+				data.drunk = math.floor(status.percent)
+			end
+		end)
 
-			if xPlayer.get('sex') == 'm' then data.sex = 'male' else data.sex = 'female' end
+		if Config.EnableLicenses then
+			TriggerEvent('esx_license:getLicenses', target, function(licenses)
+				data.licenses = licenses
+				cb(data)
+			end)
+		else
+			cb(data)
 		end
+	else
+		local xPlayer = ESX.GetPlayerFromId(target)
+
+		local data = {
+			name       = GetPlayerName(target),
+			job        = xPlayer.job,
+			inventory  = xPlayer.inventory,
+			accounts   = xPlayer.accounts,
+			weapons    = xPlayer.loadout
+		}
 
 		TriggerEvent('esx_status:getStatus', target, 'drunk', function(status)
 			if status then
-				data.drunk = ESX.Math.Round(status.percent)
-			end
-
-			if Config.EnableLicenses then
-				TriggerEvent('esx_license:getLicenses', target, function(licenses)
-					data.licenses = licenses
-					cb(data)
-				end)
-			else
-				cb(data)
+				data.drunk = math.floor(status.percent)
 			end
 		end)
+
+		TriggerEvent('esx_license:getLicenses', target, function(licenses)
+			data.licenses = licenses
+		end)
+
+		cb(data)
 	end
 end)
 
